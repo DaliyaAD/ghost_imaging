@@ -1,1 +1,69 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Tue Jun 30 15:53:47 2026
 
+@author: ellaward
+"""
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+CENTRE = 16
+SIZE = 32
+
+#Defining the 32x32 array in x,y coords
+def grid_size():
+    y, x = np.meshgrid(np.arange(SIZE), np.arange(SIZE), indexing='ij')
+    return x, y
+    # Flip axes to convention
+
+#Generating a random 32x32 binary pattern
+def array_rand():
+    arr_rand = np.random.randint(0, 2, size=(SIZE, SIZE))
+    return arr_rand
+
+#Square
+def array_sq(width):
+    HALF = width//2
+    arr_sq = np.zeros((SIZE, SIZE))
+    arr_sq[CENTRE-HALF:CENTRE+HALF, CENTRE-HALF:CENTRE+HALF] = 1
+    return arr_sq
+
+#Circle
+def array_circ(diameter):
+    # Equation of a circle. We can set values above or below as 1 or 0
+    x, y = grid_size()
+    circle = np.sqrt((x-CENTRE)**2+(y-CENTRE)**2)
+    arr_circ = (circle <= diameter).astype(int)
+    return arr_circ
+
+#Ring
+def array_ring(diameter):
+    x, y = grid_size()
+    circle = np.sqrt((x-CENTRE)**2+(y-CENTRE)**2)
+    arr_ring = ((diameter-1 <= circle) & (circle <= diameter+1)).astype(int)
+    return arr_ring
+
+#Ellipse
+def array_elp(maj_ax, min_ax):
+    x, y = grid_size()
+    ellipse = np.sqrt(((x-CENTRE)/min_ax)**2+((y-CENTRE)/maj_ax)**2)
+    arr_elp = (ellipse <= 1).astype(int)
+    return arr_elp
+
+#Sine wave
+def array_sin(AMPLITUDE, FREQUENCY, THICKNESS, offset=CENTRE):
+    x, y = grid_size()
+    sin_wave = AMPLITUDE*np.sin(x*FREQUENCY)+offset
+    arr_sin = (np.abs(y - sin_wave) <= THICKNESS).astype(int)
+    return arr_sin
+
+
+def disp_pattern(pattern):
+    plt.imshow(pattern, cmap='gray')
+    plt.axis('off')
+    plt.show()
+
+
+disp_pattern(array_sin(4, 0.3, 1))
