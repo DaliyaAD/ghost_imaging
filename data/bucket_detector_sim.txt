@@ -160,3 +160,5 @@ def pixel_weighting():
 
 pixel_weighting()
 # Subtracting the mean weight yield a much higher contrast
+# I now need to use correlation whereby if there is no matching pixel, it will not register
+# So far, I have just subtracted the mean of the weighting. I believe the next steps are to use what was outlined in Shapiro's paper
