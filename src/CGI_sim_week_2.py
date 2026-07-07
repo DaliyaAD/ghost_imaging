@@ -9,12 +9,14 @@ Created on Tue Jun 30 22:43:50 2026
 import numpy as np
 import matplotlib.pyplot as plt
 from phantoms import make_phantom
-
+from skimage.metrics import mean_squared_error as MSE
+from skimage.metrics import peak_signal_noise_ratio as PSNR
+from skimage.metrics import structural_similarity as SSIM
 
 # PLOTTING INFORMATION
 PLOT_TITLE = 'The Effect of M Value on Image Reconstruction Quality'
 X_LABEL = 'M value'
-Y_LABEL = 'Deviation'
+Y_LABEL = 'Mean Squared Error'
 AUTO_X_LIMITS = True
 X_LIMITS = [0., 10.]  # Not used unless AUTO_X_LIMITS = False
 AUTO_Y_LIMITS = True
@@ -126,24 +128,22 @@ def scale_normalize(reconstructed_pattern):
     return normalised_pattern
 
 
-def deviation(reconstruction, true_values):
+def normal_MSE(reconstruction, phantom):
     """
-    Function that calculates the MSD of the reconstructed image and the 
-    original
+    Normalises the MSE by the square of the true signal.
 
     Parameters
     ----------
     reconstruction : array, reconstructed image
-    true_values : array, original phantom image
+    phantom : array, original phantom image
 
     Returns
     -------
-    mean_sq_dev : float, mean square deviation of the reconstructed image to 
-    the phantom image
+    float, normalised MSE of the reconstructed image.
 
     """
-    mean_sq_dev = np.mean((reconstruction - true_values)**2)
-    return mean_sq_dev
+    NMSE = MSE(reconstruction, phantom) / np.mean(phantom**2)
+    return NMSE
 
 
 def disp_pattern(pattern, M):
@@ -162,7 +162,7 @@ def disp_pattern(pattern, M):
     plt.show()
 
 
-def iterate(pattern, arr_size, interval=None, upper_m=None, arr_seed=None):
+def iterate(phantom, arr_size, interval=None, upper_m=None, arr_seed=None):
     """
     Funtion that reconstructs the phantom image at different values of M.
     This iterates through values of M at designated intervals up to a maximum value.
@@ -179,26 +179,34 @@ def iterate(pattern, arr_size, interval=None, upper_m=None, arr_seed=None):
 
     Returns
     -------
-    dev_values : Values of deviation from the phantom for each M value
+    dev_values : Values of mean_squared_error from the phantom for each M value
 
     """
     M_list = list(range(interval, upper_m + 1, interval))
     full_stack = many_array_rand(upper_m, arr_size=arr_size, arr_seed=arr_seed)
-    bucket_all = compute_bucket_values(full_stack, pattern)
+    bucket_all = compute_bucket_values(full_stack, phantom)
 
-    dev_values = np.zeros(len(M_list))
+    MSE_values = np.zeros(len(M_list))
+    NMSE_values = np.zeros(len(M_list))
+    PSNR_values = np.zeros(len(M_list))
+    SSIM_values = np.zeros(len(M_list))
+    sample_ratio = np.zeros(len(M_list))
     for index, M in enumerate(M_list):
         stack_m = full_stack[:M]
         bucket_m = bucket_all[:M]
-        recon = scale_normalize(reconstruct_image(bucket_m, stack_m, M))
-        disp_pattern(recon, M)
-        dev_values[index] = deviation(recon, pattern)
-    return np.array(M_list), dev_values
+        recon = scale_normalize(reconstruct_image(bucket_m, stack_m))
+        #disp_pattern(recon, M)
+        MSE_values[index] = MSE(recon, phantom)
+        NMSE_values[index] = normal_MSE(recon, phantom)
+        PSNR_values[index] = PSNR(recon, phantom, data_range=1)
+        SSIM_values[index] = SSIM(recon, phantom, data_range=1)
+        sample_ratio[index] = M/(arr_size**2)
+    return np.array(M_list), sample_ratio, MSE_values, NMSE_values, PSNR_values, SSIM_values
 
 
 def main():
     """
-    Executes reconstruction of the phantom image and plots the deviation values
+    Executes reconstruction of the phantom image and plots the mean_squared_error values
     against M values
 
     Returns
@@ -207,14 +215,15 @@ def main():
 
     """
     ARR_SIZE = 32
-    SHAPE, SHAPE_PARAMS = "square", {"width": 10}
-    INTERVAL, UPPER_M = 500, 2000
+    SHAPE, SHAPE_PARAMS = "ring", {"radius": 10}
+    INTERVAL, UPPER_M = 250, 3000
     SEED = 43
 
     phantom = make_phantom(SHAPE, ARR_SIZE, **SHAPE_PARAMS)
     data_points = iterate(phantom, ARR_SIZE, interval=INTERVAL,
                           upper_m=UPPER_M, arr_seed=SEED)
-    create_plot(data_points[0], data_points[1])
+    create_plot(data_points[0], data_points[4])
+    #create_plot(data_points[0], data_points[2])
 
 
 main()
