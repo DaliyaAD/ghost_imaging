@@ -16,8 +16,11 @@ Determines the fidelity of reconstruction through a few image metrics
 
 import numpy as np
 import matplotlib.pyplot as plt
-from skimage.metrics import mean_squared_error as MSE
-
+import pandas as pd
+from phantoms import make_phantom
+from metrics import image_metric
+import time
+from tabulate import tabulate
 
 # PLOTTING INFORMATION
 PLOT_TITLE = 'The Effect of M Value on Image Reconstruction Quality'
@@ -58,27 +61,15 @@ def create_plot(x_data, y_data):
     plt.savefig(FIGURE_NAME, dpi=FIGURE_RESOLUTION)
 
 
-def many_array_rand(M, arr_size=None, arr_seed=None):
-    """
-    Produces a 3D stack of randomly generated binary patterns from a specified 
-    seed.
-
-    Parameters
-    ----------
-    M : float, number of speckled patterns used to reconstruct the image
-    arr_size : float, size of the images. 
-        The default is None.
-    arr_seed : float, seed number that the random patterns are extracted from/
-        The default is None.
-
-    Returns
-    -------
-    arr_rand : ND numpy array, stack of random binary patterns
-
-    """
+def generate_pattern(pattern, M, arr_size=None, arr_seed=None):
     rng = np.random.default_rng(seed=arr_seed)
-    arr_rand = rng.integers(0, 2, size=(M, arr_size, arr_size))
-    return arr_rand
+    if pattern == "binary":
+        return rng.integers(0, 2, size=(M, arr_size, arr_size))
+    elif pattern == "gaussian":
+        return rng.normal(loc=0.5, scale=0.5, size=(M, arr_size, arr_size))
+    else:
+        raise ValueError(f"Unknown pattern '{pattern}'. "
+                         f"Choose from 'binary', 'gaussian'.")
 
 
 def compute_bucket_values(stack, phantom):
@@ -138,24 +129,6 @@ def scale_normalize(reconstructed_pattern):
     return normalised_pattern
 
 
-def normal_MSE(reconstruction, phantom, data_range=None):
-    """
-    Computes the mean squared error and normalises it by the mean value of the phantom
-
-    Parameters
-    ----------
-    reconstruction : ND array, reconstructed but unnormalised image
-    phantom : ND array, phantom image
-
-    Returns
-    -------
-    NMSE : float, normalised mean squared error
-
-    """
-    NMSE = MSE(reconstruction, phantom) / np.mean(phantom**2)
-    return NMSE
-
-
 def disp_pattern(pattern, M):
     """
     Displays an array as a greyscale image.
@@ -177,7 +150,7 @@ def disp_pattern(pattern, M):
     plt.show()
 
 
-def compute_recons(phantom, arr_size, interval=None, upper_m=None, arr_seed=None):
+def compute_recons(phantom, pattern, arr_size, M, arr_seed=None):
     """
     Computes the image reconstructions over a series of M value intervals up 
     to a maximum. The M values and reconstructed arrays are assigned to a an
@@ -200,36 +173,53 @@ def compute_recons(phantom, arr_size, interval=None, upper_m=None, arr_seed=None
         DESCRIPTION.
 
     """
-    M_list = list(range(interval, upper_m + 1, interval))
-    full_stack = many_array_rand(upper_m, arr_size=arr_size, arr_seed=arr_seed)
+    full_stack = generate_pattern(
+        pattern, M, arr_size=arr_size, arr_seed=arr_seed)
     bucket_all = compute_bucket_values(full_stack, phantom)
-    recons = np.zeros((len(M_list), arr_size, arr_size))
-    # NB: enumerate allows iteration whilst keeping track of the index
-    for index, M in enumerate(M_list):
-        stack_m = full_stack[:M]
-        bucket_m = bucket_all[:M]
-        recon = scale_normalize(reconstruct_image(bucket_m, stack_m))
-        recons[index] = recon
-        disp_pattern(recon, M)
-    return np.array(M_list), recons
+    recon = scale_normalize(reconstruct_image(bucket_all, full_stack))
+    #disp_pattern(recon, M)
+    return recon
 
 
-def image_metric(metric, recons, phantom, data_range=None):
-    """
-    Computes image metrics and assigns values to an array with the same indexing
-    as M value.
+def main(CONFIG):
 
-    Parameters
-    ----------
-    metric : function, image metric
-    recon : ND array, reconstructed image
-    phantom : ND array, phantom image
+    # Parameters
+    arr_size = CONFIG['arr_size']
+    #pattern = CONFIG['pattern']
+    phantom = make_phantom(CONFIG['phantom'], arr_size)
+    samp_rat = CONFIG['samp_rat']
+    seed = CONFIG['seed']
 
-    Returns
-    -------
-    values : ND array, metric values for different M values
-    """
-    values = np.zeros(len(recons))
-    for index, recon in enumerate(recons):
-        values[index] = metric(recon, phantom, data_range=data_range)
-    return values
+    results = []
+    patterns = ['binary', 'gaussian']
+    for pattern in patterns:
+        for ratio in range(1, samp_rat, 1):
+            for sd in range(1, seed):
+                start = time.perf_counter()
+                M = int(ratio * arr_size**2)         # use the loop variable
+                recons = compute_recons(
+                    phantom, pattern, arr_size, M, arr_seed=sd)   # use the loop variable
+                rows = image_metric(
+                    recons, phantom, CONFIG['phantom'], pattern, M, arr_size, sd, data_range=1)
+                runtime = time.perf_counter() - start
+                rows = rows + (runtime,)
+                results.append(rows)
+
+    headers = ["Phantom", "Pattern", "Image Size", "Seed",
+               "Sampling ratio", "NMSE", "PSNR", "SSIM", "Runtime"]
+
+    df = pd.DataFrame(results, columns=headers)
+    data = df.to_csv("Exp_results.csv", index=False)
+    table = (tabulate(df, headers=headers, tablefmt="grid"))
+    print(table)
+    return rows
+
+
+CONFIG = {
+    'arr_size': 32,
+    'phantom': 'A',
+    'samp_rat': 5,
+    'seed': 3
+
+}
+main(CONFIG)

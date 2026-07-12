@@ -11,6 +11,7 @@ make_phantom function defines the selection process for the phantom image.
 """
 
 import numpy as np
+import matplotlib.pyplot as plt
 
 
 def grid_size(arr_size):
@@ -126,8 +127,51 @@ def array_sin(amplitude, frequency, thickness, arr_size):
     return arr_sin
 
 
+def make_letter_array(letter, arr_size, font_size=None, font_weight='bold',
+                      threshold=0.5):
+    """
+    Rasterizes a single letter into a binary 2D array.
+
+    Parameters
+    ----------
+    letter : str, single character to render (e.g. 'A')
+    arr_size : int, size of the output array (arr_size x arr_size)
+    font_size : float, font size in points. Defaults to ~0.7 * arr_size.
+    font_weight : str, matplotlib font weight (e.g. 'bold', 'normal')
+    threshold : float, cutoff (0-1) for binarizing the rendered greyscale image
+
+    Returns
+    -------
+    letter_arr : 2D numpy array, binary (0/1) image of the letter
+    """
+    font_size = arr_size * 0.6
+
+    dpi = 100
+    fig_inches = arr_size / dpi
+    fig = plt.figure(figsize=(fig_inches, fig_inches), dpi=dpi)
+    ax = fig.add_axes([0, 0, 1, 1])
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
+    ax.axis('off')
+
+    ax.text(0.5, 0.45, letter, fontsize=font_size, fontweight=font_weight,
+            ha='center', va='center', color='black')
+
+    fig.canvas.draw()
+    # Convert rendered figure to a greyscale numpy array
+    buf = np.frombuffer(fig.canvas.buffer_rgba(), dtype=np.uint8)
+    img = buf.reshape(fig.canvas.get_width_height()[::-1] + (4,))
+    plt.close(fig)
+
+    grey = img[:, :, :3].mean(axis=2) / 255.0  # 0 = black text, 1 = white bg
+    letter_arr = (grey < threshold).astype(int)  # 1 where letter is drawn
+
+    return letter_arr
+
 # PHANTOM IMAGE CHOICE
-def make_phantom(shape, arr_size, width=None, radius=None, maj_ax=None, min_ax=None,
+
+
+def make_phantom(shape, arr_size, width=10, radius=10, maj_ax=None, min_ax=None,
                  amplitude=None, frequency=None, thickness=None):
     """
     Defines the phantom image by selecting a shape and its parameters.
@@ -155,6 +199,8 @@ def make_phantom(shape, arr_size, width=None, radius=None, maj_ax=None, min_ax=N
         return array_elp(maj_ax, min_ax, arr_size)
     elif shape == "sine":
         return array_sin(amplitude, frequency, thickness, arr_size)
+    elif shape == "A":
+        return make_letter_array("A", arr_size)
     else:
         raise ValueError(f"Unknown phantom shape '{shape}'. "
                          f"Choose from 'square', 'circle', 'ring', 'ellipse', 'sine'.")

@@ -13,33 +13,50 @@ Generates a table of values for different image metrics.
 @author: Ella Ward
 """
 
-from CGI_sim import compute_recons as cr
-from phantoms import make_phantom as mp
-from CGI_sim import image_metric as im
-from CGI_sim import normal_MSE as NMSE
-from tabulate import tabulate
+import numpy as np
+from skimage.metrics import mean_squared_error as MSE
 from skimage.metrics import peak_signal_noise_ratio as PSNR
 from skimage.metrics import structural_similarity as SSIM
-from CGI_sim import disp_pattern
+from tabulate import tabulate
 
-ARR_SIZE = 32
-SHAPE, SHAPE_PARAMS = "sine", {
-    "amplitude": 15, "frequency": 0.2, "thickness": 2}
-INTERVAL, UPPER_M = 1000, 5000
-SEED = 43
-# Make phantom and generate reconstructed images
-phantom = mp(SHAPE, ARR_SIZE, **SHAPE_PARAMS)
-disp_pattern(phantom, 3000)
-M_values, recons = cr(phantom, ARR_SIZE, interval=INTERVAL,
-                      upper_m=UPPER_M, arr_seed=SEED)
 
-# Image metrics
-nmse = im(NMSE, recons, phantom, data_range=1)
-psnr = im(PSNR, recons, phantom, data_range=1)
-ssim = im(SSIM, recons, phantom, data_range=1)
-sam_rat = M_values/(ARR_SIZE**2)
-# Make table
-headers = ["M value", "Sampling ratio", "NMSE", "PSNR", "SSIM"]
-rows = list(zip(M_values, sam_rat, nmse, psnr, ssim))
+def normal_MSE(reconstruction, phantom, data_range=None):
+    """
+    Computes the mean squared error and normalises it by the mean value of the phantom
 
-print(tabulate(rows, headers=headers, tablefmt="grid"))
+    Parameters
+    ----------
+    reconstruction : ND array, reconstructed but unnormalised image
+    phantom : ND array, phantom image
+
+    Returns
+    -------
+    NMSE : float, normalised mean squared error
+
+    """
+    NMSE = MSE(reconstruction, phantom) / np.mean(phantom**2)
+    return NMSE
+
+
+def image_metric(recons, phantom, phantom_type, pattern, M, arr_size, arr_seed, data_range=None):
+    """
+    Computes image metrics and assigns values to an array with the same indexing
+    as M value.
+
+    Parameters
+    ----------
+    metric : function, image metric
+    recon : ND array, reconstructed image
+    phantom : ND array, phantom image
+
+    Returns
+    -------
+    values : ND array, metric values for different M values
+    """
+    nmse = normal_MSE(recons, phantom, data_range=1)
+    psnr = PSNR(recons, phantom, data_range=1)
+    ssim = SSIM(recons, phantom, data_range=1)
+    sam_rat = M/(arr_size**2)
+    rows = (phantom_type, pattern, arr_size**2,
+            arr_seed, sam_rat, nmse, psnr, ssim)
+    return rows
