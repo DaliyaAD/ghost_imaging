@@ -3,12 +3,16 @@
 """
 Created on Wed Jul 15 14:31:40 2026
 
+Contains function for binary, gaussian, correlated noise, and Hadamard pattern
+stacks all normalized to contain values from 0 to 1.
+
+Saves stack features in a dictionary with a matrix id. 
+
 @author: ellaward
 """
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.ndimage import gaussian_filter
-from tabulate import tabulate
 from scipy.linalg import hadamard
 
 statistics = []
@@ -16,7 +20,7 @@ statistics = []
 
 def scale_normalize(pattern):
     """
-    Rescales the reconstructed image using min-max normalisation.
+    Rescales an array of values using min-max normalisation.
 
     Parameters
     ----------
@@ -29,43 +33,134 @@ def scale_normalize(pattern):
     """
     arr_max = pattern.max(axis=(1, 2), keepdims=True)
     arr_min = pattern.min(axis=(1, 2), keepdims=True)
-    range = arr_max - arr_min
-    normalised_pattern = (pattern-arr_min) / \
-        (range)
-    return normalised_pattern
+    arr_range = arr_max - arr_min
+    normalized_pattern = np.divide(
+        pattern - arr_min,
+        arr_range,
+        out=np.zeros_like(pattern, dtype=float),
+        where=(arr_range != 0)
+    )
+    return normalized_pattern
+
+
+def sampling_to_M(samp_rat, arr_size):
+    """
+    Converts the desired sampling ratio into an M value which dictates the 
+    length of the pattern stack.
+
+    Parameters
+    ----------
+    samp_rat : Integer. Percentage of sample patterns against the size of the
+    image.
+    arr_size : Integer. Width and length of the array. Must be consuistent
+    between phantom and pattern.
+
+    Returns
+    -------
+    Integer. M value.
+
+    """
+    return int((samp_rat * arr_size**2) / 100)
+
+
+CONFIG = {
+    'arr_size': 32,
+    'seed': 48,
+    'samp_rat': 50,
+    'phantom_shape': 'Shepp-Logan',
+    'pattern_type': 'Binary',
+    'parameter_value': 50,
+    'recon_type': ["CGI", "DGI"]
+}
+
+
+def pattern_setup(CONFIG):
+    """
+    The pattern families are set up using similar/ the same code. 
+    This function provides a general foundation for the stack generation by 
+    determining and returning key characteristics.
+
+    Parameters
+    ----------
+    CONFIG : Dictionary. Contains input data for several variables as
+    decided by the user.
+
+    Returns
+    -------
+    samp_rat : integer. Percentage of sample patterns against the size of the 
+    image
+    arr_size : Integer. Width and length of the array. Must be consistent 
+    between phantom and pattern.
+    arr_seed : Integer. Initializes the random generator. 
+    M : Integer. Length of the pattern array.
+    rng : Instance of the generator. 
+    stack_shape : Array. The dimensions of the pattern stack.
+    A_shape : Array. The dimensions of the pattern stack as a sensing matrix.
+
+    """
+    samp_rat = CONFIG['samp_rat']
+    arr_size = CONFIG['arr_size']
+    arr_seed = CONFIG['seed']
+    level = CONFIG['parameter_value']
+    M = sampling_to_M(samp_rat, arr_size)
+    rng = np.random.default_rng(seed=arr_seed)
+    stack, A = np.zeros((M, arr_size, arr_size)
+                        ), np.zeros((M, arr_size**2))
+    stack_shape, A_shape = stack.shape, A.shape
+    return samp_rat, arr_size, arr_seed, M, rng, stack_shape, A_shape, level
 
 
 def gen_binary(CONFIG):
-    M = CONFIG['M']
-    arr_size = CONFIG['arr_size']
-    arr_seed = CONFIG['seed']
-    density = CONFIG['binary_density']
+    """
+    Generates a stack of binary patterns with adjustable mask density.
 
-    rng = np.random.default_rng(seed=arr_seed)
-    p_bright, p_dark = density/100, 1-(density/100)
+    Parameters
+    ----------
+    CONFIG : Dictionary. Contains input data for several variables as
+    decided by the user.
+
+    Returns
+    -------
+    bin_pattern : Array. Stack of random binary patterns with length M.
+
+    """
+    samp_rat, arr_size, arr_seed, M, rng, stack_shape, A_shape, level = pattern_setup(
+        CONFIG)
+
+    p_bright, p_dark = level/100, 1-(level/100)
     bin_pattern = rng.choice([0, 1], size=(
         M, arr_size, arr_size), p=[p_dark, p_bright])
 
-    statistics = ["Binary", "Binary mask density", f'{density} %', M, arr_size,
-                  arr_seed, np.mean(bin_pattern), np.var(bin_pattern)]
-    return statistics, bin_pattern
+    return bin_pattern
 
 
 def gen_gaussian(CONFIG):
-    M = CONFIG['M']
-    arr_size = CONFIG['arr_size']
-    arr_seed = CONFIG['seed']
-    label = CONFIG['gaussian_contrast']
+    """
+    Generates a stack of gaussian patterns with adjustable contrast.
 
-    if label == "low":
+    Parameters
+    ----------
+    CONFIG : Dictionary. Contains input data for several variables as
+    decided by the user.
+
+    Returns
+    -------
+    gaus_pattern : Array. Stack of randomly generated gaussian patterns with 
+    length M.
+
+    """
+    samp_rat, arr_size, arr_seed, M, rng, stack_shape, A_shape, level = pattern_setup(
+        CONFIG)
+
+    if level == "low":
         contrast = 3
-    elif label == "medium":
+    elif level == "medium":
         contrast = 2
-    elif label == "high":
+    elif level == "high":
         contrast = 1
     else:
         raise ValueError(
-            f"Unknown contrast value '{label}'. Choose from 'low', 'medium', or 'high.")
+            f"Unknown contrast value '{level}'. Choose from 'low', 'medium', or 'high.")
 
     rng = np.random.default_rng(seed=arr_seed)
     arr = scale_normalize(rng.normal(
@@ -73,9 +168,8 @@ def gen_gaussian(CONFIG):
     z_scores = (arr - arr.mean()) / arr.std()
     z_clipped = np.clip(z_scores, -contrast, contrast)
     gaus_pattern = scale_normalize(z_clipped)
-    statistics = ["Gaussian", "Contrast", label, M, arr_size, arr_seed,
-                  np.mean(gaus_pattern), np.var(gaus_pattern)]
-    return statistics, gaus_pattern
+
+    return gaus_pattern
 
 
 """
@@ -86,78 +180,156 @@ More data removed means more contrast when renormalising
 
 
 def gen_noise(CONFIG):
-    M = CONFIG['M']
-    arr_size = CONFIG['arr_size']
-    arr_seed = CONFIG['seed']
-    label = CONFIG['grain_size']
+    """
+    Generates a stack of correlated noise patterns with adjustable grain size.
 
-    if label == "small":
+    Parameters
+    ----------
+    CONFIG : Dictionary. Contains input data for several variables as
+    decided by the user.
+
+    Returns
+    -------
+    corr_pattern : Array. Stack of randomly generated correlared noise patterns 
+    with length M.
+
+    """
+    samp_rat, arr_size, arr_seed, M, rng, stack_shape, A_shape, level = pattern_setup(
+        CONFIG)
+
+    if level == "small":
         blur = 0
-    elif label == "moderate":
+    elif level == "moderate":
         blur = 1
-    elif label == "large":
+    elif level == "large":
         blur = 2
     else:
         raise ValueError(
-            f"Unknown grain size '{label}'. Choose from 'small', 'moderate', or 'large.")
+            f"Unknown grain size '{level}'. Choose from 'small', 'moderate', or 'large.")
 
     rng = np.random.default_rng(seed=arr_seed)
     arr = scale_normalize(rng.random(size=(M, arr_size, arr_size)))
     corr_pattern = gaussian_filter(arr, blur, axes=(1, 2))
-    statistics = ["Correlated noise", "Grain size", label, M, arr_size, arr_seed,
-                  np.mean(corr_pattern), np.var(corr_pattern)]
-    return statistics, corr_pattern
-
-
-def disp_pattern(pattern, samp_rat):
-    """
-    Displays an array as a greyscale image.
-
-    Parameters
-    ----------
-    pattern : ND array, image being displayed
-    M : float, number of speckled patterns (only used for plot title)
-
-    Returns
-    -------
-    None.
-
-    """
-    plt.figure(figsize=(5, 5))
-    plt.imshow(pattern, cmap='gray')
-    plt.title(f"Sparsity={samp_rat}%")
-    plt.axis('off')
-    plt.savefig(f"Phantom_recon_{samp_rat}.png", dpi=400)
-    plt.show()
+    return corr_pattern
 
 
 def gen_hadamard(CONFIG):
+    samp_rat, arr_size, arr_seed, M, rng, stack_shape, A_shape, level = pattern_setup(
+        CONFIG)
+    N = arr_size**2
+    H = hadamard(N)
+    sequency = np.sum(H[:, :-1] != H[:, 1:], axis=1)
+    ordered_sequency = np.argsort(sequency)
+
+    if level == "random":
+        rows = rng.choice(N, size=M, replace=False)
+        selected = H[rows]
+    elif level == "low":
+        rows = ordered_sequency[:M]
+    elif level == "high":
+        rows = ordered_sequency[-M:]
+    else:
+        raise ValueError(
+            f"Unknown mode: {level}. Choose from 'random', 'low', 'high'")
+
+    selected = H[rows]
+    norm_selected = (selected+1) / 2
+    hard_pattern = norm_selected.reshape(M, arr_size, arr_size)
+    return hard_pattern
+
+
+def gen_matrix_A(stack):
+    """
+    Converts the stack of patterns into a 2D array to be used as a sensing
+    matrix.
+
+    Parameters
+    ----------
+    stack : 3D array. Stack of patterns
+
+    Returns
+    -------
+    mat_A : 2D array.
+
+    """
+    M, arr_size, arr_size = stack.shape
+    mat_A = stack.reshape(M, arr_size**2)
+    return mat_A
+
+
+def build_metadata(CONFIG, pattern_type, stack):
+    """
+    Writes a dictionary of stack characteristics including a matrix id for
+    file identification and experiment recreation.
+
+    Parameters
+    ----------
+    CONFIG : Dictionary. Contains input data for several variables as
+    decided by the user.
+    pattern_type : String. Pattern family name.
+    stack : 3D array. Stack of patterns
+
+    Returns
+    -------
+    dict
+        Features of the pattern stack.
+
+    """
+    samp_rat = CONFIG['samp_rat']
     arr_size = CONFIG['arr_size']
-    M = CONFIG['M']
-    base = hadamard(arr_size)  # keep the original matrix fixed
-    arr = []
-    for i in range(M):
-        rng = np.random.default_rng(seed=i)
-        # fresh permutation of the base matrix each time
-        variant = rng.permutation(base)
-        arr.append(variant)
-        # pass the actual array, not the None from .append()
-        #disp_pattern(variant, 1)
-    statistics = ["Hadamard matrix", "None", None, M, arr_size, None,
-                  np.mean(arr), np.var(arr)]
-    return statistics, arr
+    arr_seed = CONFIG['seed']
+    param_value = CONFIG['parameter_value']
+    M = stack.shape[0]
+
+    matrix_id = f"{pattern_type.lower()}_{param_value}_size{arr_size}_M{M}_seed{arr_seed}"
+
+    return {
+        "matrix_id": matrix_id,
+        "pattern_type": pattern_type,
+        "parameter_value": param_value,
+        "samp_rat": samp_rat,
+        "arr_size": arr_size,
+        "seed": arr_seed,
+        "M": M,
+        "N_pixels": arr_size**2,
+    }
+
+
+_GENERATORS = {
+    "Binary": (gen_binary, "Binary mask density", lambda CONFIG: f"{CONFIG['binary_density']} %"),
+    "Gaussian": (gen_gaussian, "Contrast", lambda CONFIG: CONFIG['gaussian_contrast']),
+    "Correlated Noise": (gen_noise, "Grain size", lambda CONFIG: CONFIG['grain_size']),
+    "Hadamard": (gen_hadamard, "Sequency", lambda CONFIG: CONFIG['sequency']),
+}
 
 
 def produce_pattern(CONFIG):
-    pattern = CONFIG['pattern_type']
-    if pattern == "binary":
-        return gen_binary(CONFIG)
-    elif pattern == "gaussian":
-        return gen_gaussian(CONFIG)
-    elif pattern == "correlated noise":
-        return gen_noise(CONFIG)
-    elif pattern == "hadamard":
-        return gen_hadamard(CONFIG)
-    else:
+    """
+    Parameters
+    ----------
+    CONFIG : Dictionary. Contains input data for several variables as
+    decided by the user.
+
+    Raises
+    ------
+    ValueError
+        Fails if the inputted pattern type is not in the code. 
+
+    Returns
+    -------
+    stack : 3D array. Stack of patterns
+    A : Integer. Length of the sensing matrix.
+    metadata : Dictionary. Metadata of the pattern stack.
+    """
+    pattern_type = CONFIG['pattern_type']
+    try:
+        gen_fn, extra_label, extra_value_fn = _GENERATORS[pattern_type]
+    except KeyError:
         raise ValueError(
-            f"Unknown grain size '{pattern}'. Choose from 'binary', 'gaussian', 'correlated noise, or 'hadamard'.")
+            f"Unknown pattern type '{pattern_type}'. Choose from {list(_GENERATORS)}.")
+
+    stack = gen_fn(CONFIG)
+    A = gen_matrix_A(stack)
+    metadata = build_metadata(CONFIG, pattern_type.capitalize(), stack)
+
+    return stack, A, metadata
