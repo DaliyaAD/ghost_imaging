@@ -7,11 +7,17 @@ Contains functions for phantom images shapes with defineable shape parameters.
 Grid set up allows mroe complex phantoms to be made.
 make_phantom function defines the selection process for the phantom image.
 
+The most interesting/appropriate phantoms are the letters (make_letter_array)
+and the Shepp-Logan phantom (shepp_logan_phantom()). The latter is a standard 
+test for reconstructive algorthims. 
+
 @author: ellaward
 """
 
 import numpy as np
 import matplotlib.pyplot as plt
+from skimage.data import shepp_logan_phantom
+from skimage.transform import resize
 
 
 def grid_size(arr_size):
@@ -201,6 +207,17 @@ def make_phantom(shape, arr_size, width=10, radius=10, maj_ax=None, min_ax=None,
         return array_sin(amplitude, frequency, thickness, arr_size)
     elif shape == "A":
         return make_letter_array("A", arr_size)
+    elif shape == "Shepp-Logan":
+        phantom = shepp_logan_phantom()
+        phantom_resized = resize(
+            phantom, (arr_size, arr_size), anti_aliasing=True)
+        return phantom_resized
     else:
         raise ValueError(f"Unknown phantom shape '{shape}'. "
                          f"Choose from 'square', 'circle', 'ring', 'ellipse', 'sine'.")
+        
+
+
+
+
+

@@ -17,7 +17,6 @@ import numpy as np
 from skimage.metrics import mean_squared_error as MSE
 from skimage.metrics import peak_signal_noise_ratio as PSNR
 from skimage.metrics import structural_similarity as SSIM
-from tabulate import tabulate
 
 
 def normal_MSE(reconstruction, phantom, data_range=None):
@@ -38,7 +37,7 @@ def normal_MSE(reconstruction, phantom, data_range=None):
     return NMSE
 
 
-def image_metric(recons, phantom, phantom_type, pattern, M, arr_size, arr_seed, data_range=None):
+def image_metric(recons, phantom):
     """
     Computes image metrics and assigns values to an array with the same indexing
     as M value.
@@ -53,10 +52,8 @@ def image_metric(recons, phantom, phantom_type, pattern, M, arr_size, arr_seed, 
     -------
     values : ND array, metric values for different M values
     """
-    nmse = normal_MSE(recons, phantom, data_range=1)
-    psnr = PSNR(recons, phantom, data_range=1)
-    ssim = SSIM(recons, phantom, data_range=1)
-    sam_rat = M/(arr_size**2)
-    rows = (phantom_type, pattern, arr_size**2,
-            arr_seed, sam_rat, nmse, psnr, ssim)
-    return rows
+    return {
+        "nmse": float(normal_MSE(recons, phantom, data_range=1)),
+        "psnr": float(PSNR(recons, phantom, data_range=1)),
+        "ssim": float(SSIM(recons, phantom, data_range=1)),
+    }

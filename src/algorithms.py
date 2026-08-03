@@ -11,7 +11,7 @@ Created on Tue Jun 30 22:43:50 2026
 import numpy as np
 from metrics import image_metric
 import time
-from patterns_mat_A import produce_pattern
+from patterns import produce_pattern
 from phantoms import make_phantom
 
 
@@ -202,12 +202,8 @@ def main(CONFIG, recon_type):
 
     """
     arr_size = CONFIG['arr_size']
-    seed = CONFIG['seed']
     phantom_shape = CONFIG['phantom_shape']
     phantom = make_phantom(phantom_shape, arr_size)
-    pattern_type = CONFIG['pattern_type']
-    samp_rat = CONFIG['samp_rat']
-    M = sampling_to_M(samp_rat, arr_size)
 
     pattern_stack, A, metadata = produce_pattern(CONFIG)
 
@@ -218,10 +214,9 @@ def main(CONFIG, recon_type):
     elif recon_type == "Ridge":
         lam = CONFIG.get('lam', 1.0)          # add 'lam' to your CONFIG dict
         recon = compute_recon_ridge(phantom, pattern_stack, A, lam)
-    start = time.perf_counter()
-    row = image_metric(
-        recon, phantom, phantom_shape, pattern_stack, pattern_type, M, arr_size, seed, data_range=1)
-    runtime = time.perf_counter() - start
 
-    results = (recon_type,) + row + (runtime,)
-    return results, recon
+    start = time.perf_counter()
+    metrics = image_metric(recon, phantom)
+    runtime = time.perf_counter() - start
+    metrics = {**metrics, 'runtime': runtime, }
+    return metrics, recon

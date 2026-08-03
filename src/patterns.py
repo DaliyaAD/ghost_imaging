@@ -63,17 +63,6 @@ def sampling_to_M(samp_rat, arr_size):
     return int((samp_rat * arr_size**2) / 100)
 
 
-CONFIG = {
-    'arr_size': 32,
-    'seed': 48,
-    'samp_rat': 50,
-    'phantom_shape': 'Shepp-Logan',
-    'pattern_type': 'Binary',
-    'parameter_value': 50,
-    'recon_type': ["CGI", "DGI"]
-}
-
-
 def pattern_setup(CONFIG):
     """
     The pattern families are set up using similar/ the same code. 
@@ -208,9 +197,9 @@ def gen_noise(CONFIG):
             f"Unknown grain size '{level}'. Choose from 'small', 'moderate', or 'large.")
 
     rng = np.random.default_rng(seed=arr_seed)
-    arr = scale_normalize(rng.random(size=(M, arr_size, arr_size)))
+    arr = rng.random(size=(M, arr_size, arr_size))
     corr_pattern = gaussian_filter(arr, blur, axes=(1, 2))
-    return corr_pattern
+    return scale_normalize(corr_pattern)
 
 
 def gen_hadamard(CONFIG):
@@ -276,15 +265,17 @@ def build_metadata(CONFIG, pattern_type, stack):
 
     """
     samp_rat = CONFIG['samp_rat']
+    recon_type = CONFIG['recon_type']
     arr_size = CONFIG['arr_size']
     arr_seed = CONFIG['seed']
     param_value = CONFIG['parameter_value']
     M = stack.shape[0]
 
-    matrix_id = f"{pattern_type.lower()}_{param_value}_size{arr_size}_M{M}_seed{arr_seed}"
+    matrix_id = f"{recon_type}_{pattern_type.lower()}_{param_value}_size{arr_size}_M{M}_seed{arr_seed}"
 
     return {
         "matrix_id": matrix_id,
+        "recon_type": recon_type,
         "pattern_type": pattern_type,
         "parameter_value": param_value,
         "samp_rat": samp_rat,
