@@ -170,6 +170,21 @@ def stack_statistics(stack):
     }
 
 
+def effective_rank(A):
+    s = np.linalg.svd(A, compute_uv=False)
+
+    # Normalize singular values into probabilities
+    p = s / np.sum(s)
+
+    # Remove zeros to avoid log(0)
+    p = p[p > 0]
+
+    # Shannon entropy
+    entropy = -np.sum(p * np.log(p))
+
+    return np.exp(entropy)
+
+
 def compute_matrix_stats(A):
     """
     Computes pattern statistics that rely upon the sensing matrix, A.
@@ -184,7 +199,7 @@ def compute_matrix_stats(A):
         Dictionary of key pattern statistics.
 
     """
-    rank = np.linalg.matrix_rank(A)
+    rank = effective_rank(A)
     singular_values = np.linalg.svd(A, compute_uv=False)
     cond_number = singular_values[0] / \
         singular_values[-1] if singular_values[-1] > 0 else np.inf
