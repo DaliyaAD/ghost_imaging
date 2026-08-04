@@ -96,7 +96,7 @@ def mutual_coherence(A_matrix):
 
     """
     norms = np.linalg.norm(A_matrix, axis=0, keepdims=True)
-    normalization = A_matrix / norms
+    normalization = A_matrix / (norms+eps)
     gram_matrix = normalization.T @ normalization
     np.fill_diagonal(
         gram_matrix, 0)  # Don't assign to a variable as this function directly modifies gram_matrix.

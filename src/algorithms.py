@@ -214,6 +214,9 @@ def main(CONFIG, recon_type):
     elif recon_type == "Ridge":
         lam = CONFIG.get('lam', 1.0)          # add 'lam' to your CONFIG dict
         recon = compute_recon_ridge(phantom, pattern_stack, A, lam)
+    else:
+        raise ValueError(
+            f"Unknown reconstruction algorithm '{recon_type}'.")
 
     start = time.perf_counter()
     metrics = image_metric(recon, phantom)

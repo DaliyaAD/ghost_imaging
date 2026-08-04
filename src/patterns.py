@@ -265,17 +265,12 @@ def build_metadata(CONFIG, pattern_type, stack):
 
     """
     samp_rat = CONFIG['samp_rat']
-    recon_type = CONFIG['recon_type']
     arr_size = CONFIG['arr_size']
     arr_seed = CONFIG['seed']
     param_value = CONFIG['parameter_value']
     M = stack.shape[0]
 
-    matrix_id = f"{recon_type}_{pattern_type.lower()}_{param_value}_size{arr_size}_M{M}_seed{arr_seed}"
-
-    return {
-        "matrix_id": matrix_id,
-        "recon_type": recon_type,
+    return{
         "pattern_type": pattern_type,
         "parameter_value": param_value,
         "samp_rat": samp_rat,
