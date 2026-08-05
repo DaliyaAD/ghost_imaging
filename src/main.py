@@ -52,24 +52,24 @@ for pattern_type, samp_rat, seed in product(
         CONFIG['seed']):
 
     for parameter_value in PARAM_VALUES[pattern_type]:
-            config = CONFIG.copy()
-            config.update({
-                'pattern_type': pattern_type,
-                'parameter_value': parameter_value,
-                'samp_rat': samp_rat,
-                'seed': seed,
-            })
-            stack, A, metadata = patterns.produce_pattern(config)
-            stats = matrix_stats.compute_all_stats(stack, A)
-            for reconstruction in config['recon_type']:
-                metrics, recon = main(config, reconstruction)
-                matrix_id = f"{reconstruction}_{config['pattern_type'].lower()}_{config['parameter_value']}_size{config['arr_size']}_samprat{config['samp_rat']}_seed{config['seed']}"
-                POOP = {
-                    "matrix_id": matrix_id,
-                    "recon_type": reconstruction,
-                }
-                week5 = {**POOP, **metadata, **stats, **metrics}
-                rows.append(week5)
+        config = CONFIG.copy()
+        config.update({
+            'pattern_type': pattern_type,
+            'parameter_value': parameter_value,
+            'samp_rat': samp_rat,
+            'seed': seed,
+        })
+        stack, A, metadata = patterns.produce_pattern(config)
+        stats = matrix_stats.compute_all_stats(stack, A)
+        for reconstruction in config['recon_type']:
+            metrics, recon = main(config, reconstruction)
+            matrix_id = f"{reconstruction}_{config['pattern_type'].lower()}_{config['parameter_value']}_size{config['arr_size']}_samprat{config['samp_rat']}_seed{config['seed']}"
+            ID = {
+                "matrix_id": matrix_id,
+                "recon_type": reconstruction,
+            }
+            week5 = {**ID, **metadata, **stats, **metrics}
+            rows.append(week5)
 
 df = pd.DataFrame(rows)
 if SAVING_INFO['save_data']:
